@@ -1,0 +1,79 @@
+alias: "TNEB Power Shutdown Notification Alert"
+id: "tneb_power_shutdown_notification_alert"
+description: "Sends notifications 1 day before (9 AM & 8 PM) and on the shutdown day (6:30 AM, 7:30 AM, 8:30 AM)"
+mode: single
+
+trigger:
+  # 1 Day Before: 9:00 AM & 8:00 PM
+  - platform: time
+    at: "09:00:00"
+    id: "day_before"
+  - platform: time
+    at: "20:00:00"
+    id: "day_before"
+
+  # Particular Day: 6:30 AM, 7:30 AM & 8:30 AM
+  - platform: time
+    at: "06:30:00"
+    id: "same_day"
+  - platform: time
+    at: "07:30:00"
+    id: "same_day"
+  - platform: time
+    at: "08:30:00"
+    id: "same_day"
+
+condition:
+  # Verify power outage sensor exists and has scheduled outage
+  - condition: template
+    value_template: >
+      {{ state_attr('sensor.tneb_power_outage', 'has_outage') == true and
+         state_attr('sensor.tneb_power_outage', 'date') is not none }}
+
+action:
+  - choose:
+      # ------------------------------------------------------------------------
+      # 1. ONE DAY BEFORE (Tomorrow)
+      # ------------------------------------------------------------------------
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ state_attr('sensor.tneb_power_outage', 'date') == (now() + timedelta(days=1)).strftime('%Y-%m-%d') and
+                 (trigger.id == 'day_before' or trigger.id is not defined) }}
+        sequence:
+          - service: persistent_notification.create
+            data:
+              title: "⚡ Power Shutdown Tomorrow"
+              message: >
+                Tomorrow will be Power Shutdown from {{ state_attr('sensor.tneb_power_outage', 'time') }}.
+                Area: {{ state_attr('sensor.tneb_power_outage', 'town') }}
+              notification_id: "tneb_shutdown_tomorrow"
+
+          - service: notify.notify
+            data:
+              title: "⚡ Power Shutdown Tomorrow"
+              message: >
+                Tomorrow will be Power Shutdown from {{ state_attr('sensor.tneb_power_outage', 'time') }}. Area: {{ state_attr('sensor.tneb_power_outage', 'town') }}
+
+      # ------------------------------------------------------------------------
+      # 2. PARTICULAR DAY (Today)
+      # ------------------------------------------------------------------------
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ state_attr('sensor.tneb_power_outage', 'date') == now().strftime('%Y-%m-%d') and
+                 (trigger.id == 'same_day' or trigger.id is not defined) }}
+        sequence:
+          - service: persistent_notification.create
+            data:
+              title: "⚡ Power Shutdown Today"
+              message: >
+                Today will be Power Shutdown from {{ state_attr('sensor.tneb_power_outage', 'time') }}.
+                Area: {{ state_attr('sensor.tneb_power_outage', 'town') }}
+              notification_id: "tneb_shutdown_today"
+
+          - service: notify.notify
+            data:
+              title: "⚡ Power Shutdown Today"
+              message: >
+                Today will be Power Shutdown from {{ state_attr('sensor.tneb_power_outage', 'time') }}. Area: {{ state_attr('sensor.tneb_power_outage', 'town') }}

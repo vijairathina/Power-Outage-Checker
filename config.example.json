@@ -1,0 +1,13 @@
+{
+    "circle": "KRISHNAGIRI",
+    "filter": "Hosur|Sanachandiram|Onnalvadi|Sanamavu|Thorapally|Karapaly|Kollapally|Thiruchipally|Old Temple Hudco|Alasanatham",
+    "all_records": false,
+    "daily_check_time": "06:00",
+    "home_assistant": {
+        "enabled": true,
+        "url": "http://homeassistant.local:8123",
+        "token": "YOUR_HOME_ASSISTANT_LONG_LIVED_ACCESS_TOKEN",
+        "entity_id": "sensor.tneb_power_outage",
+        "send_persistent_notification": false
+    }
+}

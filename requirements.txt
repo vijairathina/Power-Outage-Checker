@@ -1,0 +1,10 @@
+playwright>=1.40.0
+ddddocr>=1.6.0
+pandas>=2.0.0
+beautifulsoup4>=4.12.0
+numpy>=1.24.0
+Pillow>=10.0.0
+requests>=2.28.0
+# Optional fallback OCR (OpenCV + Tesseract):
+opencv-python-headless>=4.8.0
+pytesseract>=0.3.10
