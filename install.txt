@@ -1,0 +1,34 @@
+Method B: Systemd Timer
+Create the service unit:
+
+bash
+sudo nano /etc/systemd/system/tneb-outage.service
+ini
+[Unit]
+Description=TNEB Power Outage Checker
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+User=pi
+WorkingDirectory=/home/pi/Power-Outage-Checker
+ExecStart=/home/pi/Power-Outage-Checker/venv/bin/python app.py
+[Install]
+WantedBy=multi-user.target
+Create the daily 6:00 AM timer:
+
+bash
+sudo nano /etc/systemd/system/tneb-outage.timer
+ini
+[Unit]
+Description=Run TNEB Outage Checker daily at 6:00 AM
+[Timer]
+OnCalendar=*-*-* 06:00:00
+Persistent=true
+[Install]
+WantedBy=timers.target
+Enable and start the timer:
+
+bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now tneb-outage.timer

@@ -266,8 +266,45 @@ action:
 
 ## 📊 Home Assistant Dashboard Card
 
-Add this Markdown card to your Home Assistant dashboard:
+You can add either the simple Markdown card or the advanced dynamic badge card to your Home Assistant dashboard:
 
+### 🔹 Option 1: Advanced Dynamic Status Card (Recommended)
+Automatically shows **TODAY**, **TOMORROW**, **Completed (YYYY-MM-DD)**, or **Upcoming (YYYY-MM-DD)**:
+
+```yaml
+type: markdown
+title: ⚡ Scheduled Power Outages
+content: |
+  {% set entity = 'sensor.tneb_power_outage' %}
+  {% set raw_date = state_attr(entity, 'date') | string | trim %}
+  {% set current_month = now().strftime('%Y-%m') %}
+
+  {% if raw_date not in ['None', 'none', 'unavailable', 'unknown', ''] and raw_date[:7] == current_month %}
+    {% set diff = ((as_timestamp(raw_date ~ 'T00:00:00') - as_timestamp(now().strftime('%Y-%m-%d') ~ 'T00:00:00')) / 86400) | round(0) | int %}
+
+    {% if diff == 0 %}
+      {% set badge = "🔴 TODAY" %}
+    {% elif diff == -1 %}
+      {% set badge = "⚪ YESTERDAY" %}
+    {% elif diff == 1 %}
+      {% set badge = "🟡 TOMORROW" %}
+    {% elif diff < -1 %}
+      {% set badge = "⚪ Completed (" ~ raw_date ~ ")" %}
+    {% else %}
+      {% set badge = "🟡 Upcoming (" ~ raw_date ~ ")" %}
+    {% endif %}
+
+    {{ badge }} 🕒 {{ state_attr(entity, 'time') }}
+
+    📍 **Town:** {{ state_attr(entity, 'town') }}  
+    🔧 **Work:** {{ state_attr(entity, 'type_of_work') }}  
+
+  {% else %}
+    🟢 **No power outage notified** for {{ now().strftime('%B %Y') }}.
+  {% endif %}
+```
+
+### 🔹 Option 2: Simple Built-in Markdown Card
 ```yaml
 type: markdown
 title: ⚡ Scheduled Power Outages

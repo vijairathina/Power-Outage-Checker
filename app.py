@@ -329,9 +329,32 @@ def run_sync_cycle(
     db.init_db()
     current_month_key = datetime.now().strftime("%Y-%m")
     already_obtained = db.has_month_data(current_month_key)
-
     month_record: Optional[Dict[str, Any]] = None
 
+    # 1. If not in local SQLite, try syncing from Home Assistant (if HA already holds this month's outage)
+    # This prevents multi-device desync (e.g. Raspberry Pi starting with fresh DB while HA already has the record)
+    if not already_obtained and ha_cfg and ha_cfg.get("enabled", False):
+        ha_existing = ha_client.fetch_ha_sensor_outage(ha_cfg, current_month_key)
+        if ha_existing and ha_existing.get("outage_date"):
+            print(f"\n[HA Sync] Found existing outage for {current_month_key} in Home Assistant ({ha_existing['outage_date']}).")
+            print("[HA Sync] Syncing record into local SQLite database...")
+            month_record = db.save_single_month_outage(
+                records=[{
+                    "Date Of Outage": ha_existing.get("outage_date"),
+                    "From Date": ha_existing.get("start_time"),
+                    "To Date": ha_existing.get("end_time"),
+                    "Town": ha_existing.get("town"),
+                    "Substation": ha_existing.get("substation"),
+                    "Feeder": ha_existing.get("feeder"),
+                    "Location": ha_existing.get("location"),
+                    "Type of work": ha_existing.get("type_of_work"),
+                }],
+                month_key=current_month_key,
+                circle=ha_existing.get("circle", circle),
+            )
+            already_obtained = True
+
+    # 2. Check monthly cache
     if already_obtained and not force:
         print(f"\n[Monthly Cache] Outage information for current month ({current_month_key}) is ALREADY obtained.")
         print("[Monthly Cache] Skipping portal query for the rest of this month. (Use --force to override)")
@@ -345,9 +368,16 @@ def run_sync_cycle(
             print("[Scraper] Scrape failed. Using cached database record if available.")
             month_record = db.get_month_outage(current_month_key)
         elif len(raw_records) == 0:
-            print(f"[Scraper] No outages posted yet by TNEB for month {current_month_key}.")
-            db.set_sync_status(current_month_key, "CHECKED_NO_OUTAGE")
-            month_record = None
+            # Check if we already had an outage recorded for this month
+            cached = db.get_month_outage(current_month_key)
+            if cached and cached.get("has_outage"):
+                print(f"[Monthly Cache] No upcoming outages posted on portal today, but month {current_month_key} outage was ALREADY obtained ({cached['outage_date']}).")
+                print(f"[Monthly Cache] Retaining existing outage for the remainder of {current_month_key}.")
+                month_record = cached
+            else:
+                print(f"[Scraper] No outages posted yet by TNEB for month {current_month_key}.")
+                db.set_sync_status(current_month_key, "CHECKED_NO_OUTAGE")
+                month_record = None
         else:
             # Filter for the target area/town (e.g., Hosur)
             matching_records = raw_records
@@ -368,9 +398,16 @@ def run_sync_cycle(
                 db.set_sync_status(current_month_key, "SUCCESS_WITH_OUTAGE")
                 print(f"[DB] Successfully stored 1 outage record for month {current_month_key} ({month_record['outage_date']} {month_record['start_time']}-{month_record['end_time']}).")
             else:
-                print(f"[Scraper] No outages matched filter '{area_filter}' in circle '{circle}' for month {current_month_key}.")
-                db.set_sync_status(current_month_key, "CHECKED_NO_OUTAGE")
-                month_record = None
+                # Scraper found circle outages, but none matching filter
+                cached = db.get_month_outage(current_month_key)
+                if cached and cached.get("has_outage"):
+                    print(f"[Monthly Cache] No matching outages on portal today, but month {current_month_key} outage was ALREADY recorded ({cached['outage_date']}).")
+                    print(f"[Monthly Cache] Retaining existing outage for the remainder of {current_month_key}.")
+                    month_record = cached
+                else:
+                    print(f"[Scraper] No outages matched filter '{area_filter}' in circle '{circle}' for month {current_month_key}.")
+                    db.set_sync_status(current_month_key, "CHECKED_NO_OUTAGE")
+                    month_record = None
 
     all_history = db.get_all_monthly_history()
 

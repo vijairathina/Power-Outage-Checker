@@ -20,7 +20,7 @@ if hasattr(sys.stdout, "reconfigure"):
 def format_lovelace_markdown(outage: Optional[Dict[str, Any]], month_str: str) -> str:
     """Generate clean Markdown text suitable for a Home Assistant Lovelace card."""
     if not outage or not outage.get("has_outage"):
-        return f"### ⚡ TNEB Power Status ({month_str})\n**No scheduled power outages for this month.**"
+        return f"### ⚡ TNEB Power Status ({month_str})\n🟢 **No power outage notified** for {month_str}."
 
     o_date = outage.get("outage_date", "")
     start_t = outage.get("start_time", "")
@@ -208,3 +208,56 @@ def test_connection(ha_config: Dict[str, Any]) -> bool:
     except Exception as e:
         print(f"[Home Assistant Test] Connection failed: {e}")
         return False
+
+
+def fetch_ha_sensor_outage(ha_config: Dict[str, Any], month_key: str) -> Optional[Dict[str, Any]]:
+    """
+    Fetches the current state and attributes from Home Assistant sensor.tneb_power_outage.
+    If Home Assistant already contains a recorded outage for `month_key` with has_outage=True,
+    returns the record dictionary. This prevents wiping monthly outages when syncing across devices.
+    """
+    if not ha_config or not ha_config.get("enabled", False):
+        return None
+
+    url = ha_config.get("url", "").rstrip("/")
+    token = ha_config.get("token", "").strip()
+    entity_id = ha_config.get("entity_id", "sensor.tneb_power_outage")
+
+    if not url or not token:
+        return None
+
+    endpoint = f"{url}/api/states/{entity_id}"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        r = requests.get(endpoint, headers=headers, timeout=8)
+        if r.status_code == 200:
+            data = r.json()
+            attrs = data.get("attributes", {})
+            has_outage = attrs.get("has_outage", False)
+            sensor_month = attrs.get("current_month", "")
+            o_date = attrs.get("date")
+
+            if has_outage and o_date and (sensor_month == month_key or str(o_date).startswith(month_key)):
+                return {
+                    "outage_date": o_date,
+                    "raw_date": attrs.get("raw_date", o_date),
+                    "start_time": attrs.get("start_time", ""),
+                    "end_time": attrs.get("end_time", ""),
+                    "circle": attrs.get("circle", ""),
+                    "town": attrs.get("town", ""),
+                    "substation": attrs.get("substation", ""),
+                    "feeder": attrs.get("feeder", ""),
+                    "location": attrs.get("location", ""),
+                    "type_of_work": attrs.get("type_of_work", ""),
+                    "month_key": month_key,
+                    "has_outage": 1,
+                }
+    except Exception as e:
+        print(f"[Home Assistant Sync] Could not check existing sensor state: {e}")
+
+    return None
+

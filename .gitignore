@@ -6,8 +6,7 @@ env/
 # Sensitive configuration (Contains Home Assistant Access Tokens)
 config.json
 
-# SQLite runtime database
-outages.db
+# SQLite runtime database journal
 outages.db-journal
 
 # Python cache & compiled files
